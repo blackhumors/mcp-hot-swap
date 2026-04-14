@@ -2,7 +2,43 @@
 
 [English](README.md)
 
-[MCP (Model Context Protocol)](https://modelcontextprotocol.io/) Server 运行时热切换代理。无需重启 Claude Code，即可动态切换 Redis、PostgreSQL、MySQL 等服务的连接实例。
+> [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) Server 运行时热切换代理。无需重启 Claude Code，即可动态切换 Redis、PostgreSQL、MySQL 等服务的连接实例。
+
+## 快速开始
+
+```bash
+# 1. 克隆并安装
+git clone https://github.com/blackhumors/mcp-hot-swap.git ~/.mcp-wrapper
+cd ~/.mcp-wrapper && npm install
+
+# 2. 在 ~/.claude.json 中添加配置（以 Redis 为例，替换路径和密码）
+```
+
+```json
+{
+  "mcpServers": {
+    "redis": {
+      "command": "node",
+      "args": ["/Users/你的用户名/.mcp-wrapper/index.mjs"],
+      "type": "stdio",
+      "env": {
+        "MCP_WRAPPER_NAME": "redis",
+        "MCP_WRAPPER_COMMAND": "/path/to/redis-mcp-server",
+        "MCP_WRAPPER_TEMPLATE": "--url redis://:${password}@${host}:${port}/${db}",
+        "MCP_WRAPPER_PARAMS": "{\"host\":\"Redis 主机地址\",\"port\":\"Redis 端口\",\"password\":\"Redis 密码\",\"db\":\"数据库编号，默认 0\"}",
+        "MCP_WRAPPER_DEFAULT": "{\"host\":\"127.0.0.1\",\"port\":\"6379\",\"password\":\"your-password\",\"db\":\"0\"}"
+      }
+    }
+  }
+}
+```
+
+```bash
+# 3. 重启 Claude Code —— 搞定！所有 Redis tools 立即可用。
+# 4. 需要切换时，直接对 AI 说 "帮我切换 Redis 到 10.0.0.1:6379，密码 xxx"
+```
+
+> **注意：** `args` 中的路径必须是绝对路径（如 `/Users/yourname/.mcp-wrapper/index.mjs`）。JSON 中 `~` 不会被 shell 展开。
 
 ## 背景
 
@@ -30,10 +66,7 @@ Claude Code <--stdio--> MCP Hot-Swap <--stdio--> 实际 MCP Server
 ## 安装
 
 ```bash
-# 克隆仓库
 git clone https://github.com/blackhumors/mcp-hot-swap.git ~/.mcp-wrapper
-
-# 安装依赖
 cd ~/.mcp-wrapper && npm install
 ```
 
@@ -58,9 +91,11 @@ cd ~/.mcp-wrapper && npm install
 
 可按需组合使用：
 
-- **命令行参数**（`MCP_WRAPPER_TEMPLATE`）：适用于通过 CLI 参数传递连接信息的 MCP Server
-- **环境变量**（`MCP_WRAPPER_ENV_TEMPLATE`）：适用于通过环境变量读取连接信息的 MCP Server
-- **配置文件**（`MCP_WRAPPER_CONFIG_TEMPLATE`）：适用于需要配置文件的 MCP Server（如 YAML 格式）
+| 方式 | 环境变量 | 适用场景 |
+|------|---------|----------|
+| 命令行参数 | `MCP_WRAPPER_TEMPLATE` | MCP Server 通过 CLI 参数接收连接信息 |
+| 环境变量 | `MCP_WRAPPER_ENV_TEMPLATE` | MCP Server 通过环境变量读取连接信息 |
+| 配置文件 | `MCP_WRAPPER_CONFIG_TEMPLATE` | MCP Server 需要配置文件（如 YAML） |
 
 ## 配置示例
 
@@ -71,7 +106,7 @@ cd ~/.mcp-wrapper && npm install
   "mcpServers": {
     "redis": {
       "command": "node",
-      "args": ["~/.mcp-wrapper/index.mjs"],
+      "args": ["/Users/你的用户名/.mcp-wrapper/index.mjs"],
       "type": "stdio",
       "env": {
         "MCP_WRAPPER_NAME": "redis",
@@ -92,7 +127,7 @@ cd ~/.mcp-wrapper && npm install
   "mcpServers": {
     "postgres": {
       "command": "node",
-      "args": ["~/.mcp-wrapper/index.mjs"],
+      "args": ["/Users/你的用户名/.mcp-wrapper/index.mjs"],
       "type": "stdio",
       "env": {
         "MCP_WRAPPER_NAME": "postgres",
@@ -115,7 +150,7 @@ cd ~/.mcp-wrapper && npm install
   "mcpServers": {
     "mysql": {
       "command": "node",
-      "args": ["~/.mcp-wrapper/index.mjs"],
+      "args": ["/Users/你的用户名/.mcp-wrapper/index.mjs"],
       "type": "stdio",
       "env": {
         "MCP_WRAPPER_NAME": "mysql",
@@ -180,11 +215,21 @@ AI 会调用 `__status` 返回当前连接信息。
 └─────────────┘                └──────────────────┘                └─────────────────┘
 ```
 
+## 常见问题
+
+| 问题 | 解决方案 |
+|------|----------|
+| 启动后 tools 列表为空 | 设置 `MCP_WRAPPER_DEFAULT` 并填入有效的连接参数，让 wrapper 启动时能连接并发现 tools |
+| 报错 `MCP_WRAPPER_COMMAND is not set` | 忘记设置 `MCP_WRAPPER_COMMAND` 环境变量，需要指向实际 MCP Server 的可执行文件路径 |
+| `__connect` 报 spawn error | 检查 `MCP_WRAPPER_COMMAND` 指向的路径是否正确，手动运行一下验证 |
+| JSON 配置中 `~` 路径不生效 | 使用绝对路径（如 `/Users/yourname/.mcp-wrapper/index.mjs`），JSON 不支持 shell 的 `~` 展开 |
+| tools 能用但 `__connect` 切换无效 | 确认新参数是否正确，查看 Claude Code 的 MCP 日志（stderr）中 `[hot-swap:xxx]` 的输出 |
+
 ## 注意事项
 
 - 建议始终配置 `MCP_WRAPPER_DEFAULT`，否则启动时 tools 列表为空，AI 无法直接调用原生 tools
 - 同类型 MCP Server 的 tools 列表是固定的（不管连哪个 Redis 实例，tools 都是 `dbsize`、`get`、`set` 等），切换连接不影响 tools 列表
-- 密码等敏感信息会出现在 `~/.claude.json` 中，注意文件权限
+- 密码等敏感信息会出现在 `~/.claude.json` 中，注意文件权限（建议 `chmod 600`）
 - 依赖 `@modelcontextprotocol/sdk`，需要 Node.js 18+
 - 使用配置文件模板时，临时文件会在切换连接或断开时自动清理
 

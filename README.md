@@ -2,7 +2,43 @@
 
 [中文文档](README_CN.md)
 
-Runtime hot-swap proxy for [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) Servers. Switch Redis, PostgreSQL, MySQL, and other MCP Server connections on the fly — no restart needed.
+> Runtime hot-swap proxy for [MCP](https://modelcontextprotocol.io/) Servers. Switch Redis, PostgreSQL, MySQL and any other MCP Server connections on the fly — no restart needed.
+
+## Quick Start
+
+```bash
+# 1. Clone & install
+git clone https://github.com/blackhumors/mcp-hot-swap.git ~/.mcp-wrapper
+cd ~/.mcp-wrapper && npm install
+
+# 2. Add to ~/.claude.json (Redis example, replace paths & credentials)
+```
+
+```json
+{
+  "mcpServers": {
+    "redis": {
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/.mcp-wrapper/index.mjs"],
+      "type": "stdio",
+      "env": {
+        "MCP_WRAPPER_NAME": "redis",
+        "MCP_WRAPPER_COMMAND": "/path/to/redis-mcp-server",
+        "MCP_WRAPPER_TEMPLATE": "--url redis://:${password}@${host}:${port}/${db}",
+        "MCP_WRAPPER_PARAMS": "{\"host\":\"Redis host\",\"port\":\"Redis port\",\"password\":\"Redis password\",\"db\":\"Database number, default 0\"}",
+        "MCP_WRAPPER_DEFAULT": "{\"host\":\"127.0.0.1\",\"port\":\"6379\",\"password\":\"your-password\",\"db\":\"0\"}"
+      }
+    }
+  }
+}
+```
+
+```bash
+# 3. Restart Claude Code — done! All Redis tools are available.
+# 4. To switch: just tell the AI "switch Redis to 10.0.0.1:6379, password xxx"
+```
+
+> **Note:** The `args` path must be an absolute path (e.g. `/Users/yourname/.mcp-wrapper/index.mjs`). Shell `~` expansion does not work inside JSON.
 
 ## Problem
 
@@ -30,10 +66,7 @@ It:
 ## Install
 
 ```bash
-# Clone
 git clone https://github.com/blackhumors/mcp-hot-swap.git ~/.mcp-wrapper
-
-# Install dependencies
 cd ~/.mcp-wrapper && npm install
 ```
 
@@ -58,9 +91,11 @@ Replace your existing MCP Server entries in `~/.claude.json` with wrapped versio
 
 You can combine these as needed:
 
-- **CLI args** (`MCP_WRAPPER_TEMPLATE`): For MCP Servers that take connection info via command-line arguments
-- **Env vars** (`MCP_WRAPPER_ENV_TEMPLATE`): For MCP Servers that read environment variables
-- **Config file** (`MCP_WRAPPER_CONFIG_TEMPLATE`): For MCP Servers that require a config file (e.g. YAML)
+| Method | Env Variable | Use When |
+|--------|-------------|----------|
+| CLI args | `MCP_WRAPPER_TEMPLATE` | MCP Server takes connection info via command-line arguments |
+| Env vars | `MCP_WRAPPER_ENV_TEMPLATE` | MCP Server reads environment variables |
+| Config file | `MCP_WRAPPER_CONFIG_TEMPLATE` | MCP Server requires a config file (e.g. YAML) |
 
 ## Examples
 
@@ -71,7 +106,7 @@ You can combine these as needed:
   "mcpServers": {
     "redis": {
       "command": "node",
-      "args": ["~/.mcp-wrapper/index.mjs"],
+      "args": ["/Users/YOUR_USERNAME/.mcp-wrapper/index.mjs"],
       "type": "stdio",
       "env": {
         "MCP_WRAPPER_NAME": "redis",
@@ -92,7 +127,7 @@ You can combine these as needed:
   "mcpServers": {
     "postgres": {
       "command": "node",
-      "args": ["~/.mcp-wrapper/index.mjs"],
+      "args": ["/Users/YOUR_USERNAME/.mcp-wrapper/index.mjs"],
       "type": "stdio",
       "env": {
         "MCP_WRAPPER_NAME": "postgres",
@@ -115,7 +150,7 @@ For MCP Servers that require a YAML config file:
   "mcpServers": {
     "mysql": {
       "command": "node",
-      "args": ["~/.mcp-wrapper/index.mjs"],
+      "args": ["/Users/YOUR_USERNAME/.mcp-wrapper/index.mjs"],
       "type": "stdio",
       "env": {
         "MCP_WRAPPER_NAME": "mysql",
@@ -181,11 +216,21 @@ The AI calls `__status` and shows current connection info.
 └─────────────┘                └──────────────────┘                └─────────────────┘
 ```
 
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Tools list is empty after startup | Set `MCP_WRAPPER_DEFAULT` with valid connection params so the wrapper can connect on startup and discover tools |
+| `Error: MCP_WRAPPER_COMMAND is not set` | You forgot to set the `MCP_WRAPPER_COMMAND` env variable pointing to the actual MCP Server binary |
+| `__connect` fails with "spawn error" | Check that `MCP_WRAPPER_COMMAND` points to a valid executable. Run it manually to verify |
+| `~` path not working in JSON config | Use absolute path instead (e.g. `/Users/yourname/.mcp-wrapper/index.mjs`). JSON does not support shell `~` expansion |
+| Tools work but `__connect` switch has no effect | Verify the new params are correct. Check Claude Code's MCP logs (stderr) for `[hot-swap:xxx]` messages |
+
 ## Notes
 
 - Always set `MCP_WRAPPER_DEFAULT` — without it, the tools list is empty on startup and the AI can't call any tools until you manually `__connect`
 - Tools don't change when switching connections (a Redis MCP always has `get`, `set`, `dbsize`, etc. regardless of which instance)
-- Sensitive info (passwords) will appear in `~/.claude.json` — set proper file permissions
+- Sensitive info (passwords) will appear in `~/.claude.json` — set proper file permissions (`chmod 600`)
 - Requires `@modelcontextprotocol/sdk` and Node.js 18+
 - Temp config files are auto-cleaned on disconnect or connection switch
 
