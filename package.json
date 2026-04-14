@@ -1,0 +1,33 @@
+{
+  "name": "mcp-hot-swap",
+  "version": "1.0.0",
+  "description": "Runtime hot-swap proxy for MCP Servers - switch Redis, PostgreSQL, MySQL connections without restarting Claude Code",
+  "author": "wangyulong",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.mjs",
+  "bin": {
+    "mcp-hot-swap": "./index.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "hot-swap",
+    "proxy",
+    "redis",
+    "postgresql",
+    "mysql",
+    "runtime-switch"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blackhumors/mcp-hot-swap.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  }
+}
