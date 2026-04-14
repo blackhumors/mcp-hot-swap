@@ -1,5 +1,7 @@
 # MCP Hot-Swap
 
+[中文文档](README_CN.md)
+
 Runtime hot-swap proxy for [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) Servers. Switch Redis, PostgreSQL, MySQL, and other MCP Server connections on the fly — no restart needed.
 
 ## Problem
