@@ -346,7 +346,7 @@ async function main() {
   const connectRequired = [];
   for (const [key, desc] of Object.entries(params)) {
     connectProps[key] = { type: "string", description: String(desc) };
-    if (!/default|optional/i.test(String(desc))) connectRequired.push(key);
+    if (!/default|optional|默认|可选/i.test(String(desc))) connectRequired.push(key);
   }
   const paramDesc = Object.entries(params).map(([k, v]) => `  - ${k}: ${v}`).join("\n");
 
