@@ -40,6 +40,14 @@ cd ~/.mcp-wrapper && npm install
 
 > **注意：** `args` 中的路径必须是绝对路径（如 `/Users/yourname/.mcp-wrapper/index.mjs`）。JSON 中 `~` 不会被 shell 展开。
 
+## v2 新特性
+
+- **完整 MCP 协议代理** — 同时代理 tools、resources 和 prompts（v1 仅代理 tools）
+- **连接超时** — 默认 30s，可通过 `MCP_WRAPPER_TIMEOUT` 配置
+- **自动重连** — 子进程崩溃时自动重连（最多 3 次，间隔 2s）
+- **密码脱敏** — `__status` 自动隐藏 password、secret、token 等敏感字段
+- **错误日志** — JSON 解析错误输出到 stderr，不再静默吞掉
+
 ## 背景
 
 Claude Code 的 MCP Server 配置写在 `~/.claude.json` 中，修改后必须重启才能生效。在 dev / staging / prod 等不同环境之间切换数据库连接时，体验很差。
@@ -53,8 +61,8 @@ Claude Code <--stdio--> MCP Hot-Swap <--stdio--> 实际 MCP Server
 ```
 
 核心设计：
-1. 启动时用默认参数连接被包装的 MCP Server，获取完整 tools 列表并注册
-2. 透明代理所有 tool 调用 —— `get`、`set`、`query` 等照常使用
+1. 启动时用默认参数连接被包装的 MCP Server，获取完整 tools/resources/prompts 列表并注册
+2. 透明代理所有调用 —— `get`、`set`、`query` 等照常使用
 3. 额外注入 3 个管理 tool（`__connect`、`__status`、`__disconnect`）用于运行时切换
 4. `__connect` 时杀掉旧进程，用新参数启动新进程
 
@@ -86,6 +94,7 @@ cd ~/.mcp-wrapper && npm install
 | `MCP_WRAPPER_CONFIG_ARG` | 否 | 传递配置文件路径的参数名，默认 `--config` |
 | `MCP_WRAPPER_PARAMS` | 是 | JSON 格式的参数描述，告诉 AI 需要哪些参数及含义 |
 | `MCP_WRAPPER_DEFAULT` | 否 | JSON 格式的默认连接参数，启动时自动连接 |
+| `MCP_WRAPPER_TIMEOUT` | 否 | 连接超时时间（毫秒），默认 `30000` |
 
 ### 三种传参方式
 
@@ -197,7 +206,7 @@ AI 会自动调用 `__connect` 传入参数完成切换，无需重启。
 
 - *"当前 Redis 连的是哪个实例？"*
 
-AI 会调用 `__status` 返回当前连接信息。
+AI 会调用 `__status` 返回当前连接信息（密码自动脱敏）。
 
 ## 架构图
 
@@ -205,13 +214,14 @@ AI 会调用 `__status` 返回当前连接信息。
 ┌─────────────┐     stdio      ┌──────────────────┐     stdio      ┌─────────────────┐
 │ Claude Code  │ ◄────────────► │  MCP Hot-Swap    │ ◄────────────► │ 实际 MCP Server │
 │              │                │                  │                │ (redis/pg/mysql) │
-│ 看到的 tools:│                │ 启动时连接默认    │                │                 │
-│ - dbsize     │                │ 实例获取 tools   │                │                 │
-│ - get        │                │ 列表并注册       │   __connect    │                 │
-│ - set        │                │                  │ ──────────────►│ 杀掉旧进程      │
-│ - __connect  │                │ __connect 时     │                │ 启动新进程      │
-│ - __status   │                │ 换底层连接       │                │ 新的连接参数    │
-│ - ...        │                │                  │                │                 │
+│ 看到的能力:  │                │ 启动时连接默认    │                │                 │
+│ - tools      │                │ 实例获取 tools/  │                │                 │
+│ - resources  │                │ resources/prompts│   __connect    │                 │
+│ - prompts    │                │ 列表并注册       │ ──────────────►│ 杀掉旧进程      │
+│ - __connect  │                │                  │                │ 启动新进程      │
+│ - __status   │                │ __connect 时     │                │ 新的连接参数    │
+│ - ...        │                │ 换底层连接       │                │                 │
+│              │                │                  │                │ 崩溃时自动重连  │
 └─────────────┘                └──────────────────┘                └─────────────────┘
 ```
 
@@ -223,12 +233,15 @@ AI 会调用 `__status` 返回当前连接信息。
 | 报错 `MCP_WRAPPER_COMMAND is not set` | 忘记设置 `MCP_WRAPPER_COMMAND` 环境变量，需要指向实际 MCP Server 的可执行文件路径 |
 | `__connect` 报 spawn error | 检查 `MCP_WRAPPER_COMMAND` 指向的路径是否正确，手动运行一下验证 |
 | JSON 配置中 `~` 路径不生效 | 使用绝对路径（如 `/Users/yourname/.mcp-wrapper/index.mjs`），JSON 不支持 shell 的 `~` 展开 |
+| 连接超时 | 增大 `MCP_WRAPPER_TIMEOUT`（默认 30000ms），检查 MCP Server 是否能正常启动 |
 | tools 能用但 `__connect` 切换无效 | 确认新参数是否正确，查看 Claude Code 的 MCP 日志（stderr）中 `[hot-swap:xxx]` 的输出 |
 
 ## 注意事项
 
 - 建议始终配置 `MCP_WRAPPER_DEFAULT`，否则启动时 tools 列表为空，AI 无法直接调用原生 tools
 - 同类型 MCP Server 的 tools 列表是固定的（不管连哪个 Redis 实例，tools 都是 `dbsize`、`get`、`set` 等），切换连接不影响 tools 列表
+- `__status` 会自动隐藏 password、secret、token 等敏感字段
+- 子进程崩溃时会自动重连，最多 3 次，间隔 2 秒
 - 密码等敏感信息会出现在 `~/.claude.json` 中，注意文件权限（建议 `chmod 600`）
 - 依赖 `@modelcontextprotocol/sdk`，需要 Node.js 18+
 - 使用配置文件模板时，临时文件会在切换连接或断开时自动清理

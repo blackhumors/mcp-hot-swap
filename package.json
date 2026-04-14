@@ -1,6 +1,6 @@
 {
   "name": "mcp-hot-swap",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Runtime hot-swap proxy for MCP Servers - switch Redis, PostgreSQL, MySQL connections without restarting Claude Code",
   "author": "wangyulong",
   "license": "MIT",
@@ -18,7 +18,8 @@
     "redis",
     "postgresql",
     "mysql",
-    "runtime-switch"
+    "runtime-switch",
+    "auto-reconnect"
   ],
   "repository": {
     "type": "git",
